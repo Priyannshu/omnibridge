@@ -1,0 +1,11 @@
+{
+  "server": {
+    "host": "auto",
+    "port": 8080,
+    "secret": "super-secret-key"
+  },
+  "display": {
+    "width": 1000,
+    "height": 800
+  }
+}
