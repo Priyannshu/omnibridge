@@ -100,7 +100,7 @@ class InputEngine {
         
         // We assume the OS might take a few ms to process this move, so we keep `isRecentering = true` 
         // until the first mousemove matching the center arrives, but a timer acts as a fallback.
-        setTimeout(() => { this.isRecentering = false; }, 50);
+        setTimeout(() => { this.isRecentering = false; }, 150);
 
         uIOhook.removeAllListeners();
 
@@ -126,15 +126,17 @@ class InputEngine {
                 onEvent({ type: 'mousemove', dx, dy });
             }
 
-            // Trap mechanism: If mouse strays > 150px from center, pull it back
-            if (Math.abs(e.x - this.centerX) > 150 || Math.abs(e.y - this.centerY) > 150) {
+            // Trap mechanism: If mouse strays > 300px from center, pull it back
+            // But only trap if we're not at the screen edge (to allow boundary crossing)
+            const distanceFromCenter = Math.sqrt(Math.pow(e.x - this.centerX, 2) + Math.pow(e.y - this.centerY, 2));
+            if (distanceFromCenter > 300) {
                 this.isRecentering = true;
                 robot.moveMouse(this.centerX, this.centerY);
                 this.lastX = this.centerX;
                 this.lastY = this.centerY;
                 
                 // Safety clear just in case the hook event drops
-                setTimeout(() => { this.isRecentering = false; }, 50);
+                setTimeout(() => { this.isRecentering = false; }, 150);
             }
         });
 
@@ -217,6 +219,10 @@ class InputEngine {
                     // Receiver Side Boundaries
                     // If hitting the left edge (<=0), cross back to local mode!
                     if (newX <= 0) {
+                        return { action: 'switch-to-local' };
+                    }
+                    // If hitting the right edge, also switch back to local mode to allow boundary crossing
+                    if (newX >= this.screenSize.width - 1) {
                         return { action: 'switch-to-local' };
                     }
 

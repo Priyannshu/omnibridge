@@ -158,44 +158,20 @@ async function createWindow() {
     // Discover signaling server on the network (or fall back to config)
     await initConnection();
 
-    // Start boundary detection polling (guard so it never stacks on re-open)
+// Start boundary detection polling (guard so it never stacks on re-open)
     if (!boundaryInterval) boundaryInterval = setInterval(() => {
         if (!bridgeActive || currentSystem === 'remote' || capturing) return;
         
         const { x, y } = screen.getCursorScreenPoint();
-        const displays = screen.getAllDisplays();
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width, height } = primaryDisplay.workAreaSize;
         
-        // Multi-monitor boundary detection
-        if (displays.length > 1) {
-            // Check boundary for all displays
-            for (const display of displays) {
-                const bounds = display.bounds;
-                const edgeThreshold = 5;
-                
-                // Check right edge of display
-                if (x >= bounds.x + bounds.width - edgeThreshold && x <= bounds.x + bounds.width) {
-                    handleSystemSwitch('remote', bounds.width, bounds.height);
-                    break;
-                }
-                // Check left edge of display
-                if (x >= bounds.x && x <= bounds.x + edgeThreshold) {
-                    // Check if this is not the primary display and we're moving to it
-                    if (bounds.x > 0) { // Not primary display
-                        handleSystemSwitch('remote', bounds.width, bounds.height);
-                        break;
-                    }
-                }
-            }
-        } else {
-            // Single monitor - use regular boundary detection
-            const primaryDisplay = screen.getPrimaryDisplay();
-            const { width, height } = primaryDisplay.workAreaSize;
-            const boundary = layoutEngine.checkBoundary(x, y, width, height);
-            if (boundary) {
-                handleSystemSwitch('remote', width, height);
-            }
+        // Check if cursor is at the edge of the screen (5px from edge)
+        if (x >= width - 5 || x <= 5) {
+            handleSystemSwitch('remote', width, height);
+            return;
         }
-    }, 100); // Check every 100ms
+    }, 50); // Check every 50ms for more responsive boundary detection
 
     // Set up WebSocket client status handler
     wsClient.onStatus = (status, data) => {
@@ -333,7 +309,10 @@ function handleSystemSwitch(system, width, height) {
             }
         }
     } finally {
-        isSwitching = false;
+        // Add a small delay to prevent immediate switching back
+        setTimeout(() => {
+            isSwitching = false;
+        }, 200);
     }
 }
 
