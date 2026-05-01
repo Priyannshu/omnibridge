@@ -25,6 +25,9 @@ class WSClient {
         this._intentionalDisconnect = false;  // true when disconnect() is called manually
         this._hasNotifiedError = false;        // prevents duplicate error+close notifications
         this._heartbeatTimer = null;           // ping/pong keepalive timer
+
+        // Session cipher from SPAKE2 pairing (optional, overrides secureChannel for bridge traffic)
+        this._sessionCipher = null;
     }
 
     connect() {
@@ -109,8 +112,23 @@ class WSClient {
                     logger.info('Peer resolved from message', { peerId: this.targetId });
                 }
 
-                if (msg.payload) {
-                    const decrypted = this.secureChannel.decrypt(msg.payload);
+                if (msg.payload || msg.sessionPayload) {
+                    let decrypted;
+
+                    // Try session cipher first (SPAKE2-derived key)
+                    if (msg.sessionPayload && this._sessionCipher) {
+                        try {
+                            const buf = Buffer.from(msg.sessionPayload, 'base64');
+                            decrypted = JSON.stringify(this._sessionCipher.decryptJSON(buf));
+                        } catch (e) {
+                            logger.error('Session cipher decryption failed', { error: e.message });
+                            return;
+                        }
+                    } else if (msg.payload) {
+                        // Fallback to pre-shared SecureChannel
+                        decrypted = this.secureChannel.decrypt(msg.payload);
+                    }
+
                     if (decrypted && this.onEvent) {
                         const event = JSON.parse(decrypted);
                         
@@ -189,6 +207,18 @@ class WSClient {
 
     sendEvent(event) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+        // If a SPAKE2 session cipher is active, use it for bridge traffic
+        if (this._sessionCipher) {
+            const encrypted = this._sessionCipher.encryptJSON(event);
+            const msg = this.targetId
+                ? { target: this.targetId, sessionPayload: encrypted.toString('base64') }
+                : { sessionPayload: encrypted.toString('base64') };
+            this.ws.send(JSON.stringify(msg));
+            return;
+        }
+
+        // Fallback: use pre-shared SecureChannel
         const encrypted = this.secureChannel.encrypt(JSON.stringify(event));
         const msg = this.targetId
             ? { target: this.targetId, payload: encrypted }
@@ -243,6 +273,15 @@ class WSClient {
             }
             this.ws = null;
         }
+    }
+
+    /**
+     * Set a SPAKE2-derived session cipher for bridge traffic encryption.
+     * When set, sendEvent() and message decryption use this instead of SecureChannel.
+     * @param {SessionCipher} cipher
+     */
+    setSessionCipher(cipher) {
+        this._sessionCipher = cipher;
     }
     
     // Key exchange methods
