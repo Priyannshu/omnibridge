@@ -87,6 +87,13 @@ async function initConnection() {
     const signalingUrl = `ws://${host}:${port}`;
     wsClient = new WSClient(signalingUrl, secureChannel);
     dragEngine = new DragEngine(wsClient, fileEngine); // pass shared fileEngine singleton
+
+    // Forward device-found events from the discovery module to the renderer
+    discovery.on('deviceFound', (device) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('device-found', device);
+        }
+    });
 }
 
 // Handle user pressing Escape/Ctrl+Alt+Q to break out of remote capture
@@ -389,4 +396,50 @@ ipcMain.on('start-native-drag', (event, { filePath }) => {
             icon: path.join(__dirname, 'file-icon.png')
         });
     }
+});
+
+// ── Re-scan network (terminal `scan` command) ──
+ipcMain.on('request-scan', (event) => {
+    logger.info('Manual scan requested from terminal');
+    try {
+        const { Bonjour } = require('bonjour-service');
+        const scanner = new Bonjour();
+        const browser = scanner.find({ type: 'omnibridge-signal' });
+
+        browser.on('up', (service) => {
+            if (service.name.startsWith('omnibridge')) {
+                const device = {
+                    name: service.name,
+                    host: service.referer?.address || service.host,
+                    port: service.port
+                };
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('device-found', device);
+                }
+            }
+        });
+
+        // Stop scanning after 5 seconds
+        setTimeout(() => {
+            try { browser.stop(); scanner.destroy(); } catch (_) {}
+        }, 5000);
+    } catch (err) {
+        logger.error('Scan failed', { error: err.message });
+    }
+});
+
+// ── Store received file path for native drag ──
+let storedReceivedFile = null;
+ipcMain.on('store-received-file', (event, filePath) => {
+    storedReceivedFile = filePath;
+});
+
+// ── Disconnect bridge ──
+ipcMain.on('disconnect-bridge', () => {
+    bridgeActive = false;
+    capturing = false;
+    currentSystem = 'local';
+    inputEngine.stop();
+    releaseClipCursor();
+    logger.info('Bridge disconnected via terminal command');
 });

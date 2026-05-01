@@ -1,408 +1,215 @@
-:root {
-    --bg-dark: #020205;
-    --bg-panel: rgba(15, 15, 20, 0.7);
-    --accent: #0076ff;
-    --accent-glow: rgba(0, 118, 255, 0.4);
-    --success: #00ff88;
-    --text-main: #f0f0f5;
-    --text-dim: #9ca3af;
-    --glass: rgba(255, 255, 255, 0.03);
-    --glass-border: rgba(255, 255, 255, 0.08);
-}
-
-* {
+/* ── Reset ──────────────────────────────────────────── */
+*, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
+:root {
+    --bg: #0a0c0f;
+    --text: #c8d3dc;
+    --success: #4af0a0;
+    --error: #f05a4a;
+    --info: #7eb8f7;
+    --warning: #ffc84a;
+    --prompt: #4af0a0;
+    --bar-bg: #0d0f13;
+    --bar-border: #1a1d24;
+    --input-underline: #1e2330;
+}
+
 body {
-    font-family: 'Outfit', sans-serif;
-    background: var(--bg-dark);
-    color: var(--text-main);
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
     height: 100vh;
     overflow: hidden;
-    background-image: 
-        radial-gradient(circle at 80% 20%, #111e3b 0%, transparent 40%),
-        radial-gradient(circle at 20% 80%, #0a1121 0%, transparent 40%);
-}
-
-.app-container {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    padding: 40px;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(20px);
 }
 
-/* ── Header ─────────────────────────────────────────── */
-header {
+/* ── Title Bar (28px, draggable) ────────────────────── */
+#titleBar {
+    height: 28px;
+    min-height: 28px;
+    background: var(--bar-bg);
+    border-bottom: 1px solid var(--bar-border);
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 50px;
+    justify-content: space-between;
+    padding: 0 14px;
     -webkit-app-region: drag;
+    user-select: none;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    color: #6b7280;
 }
 
-.logo-text {
-    font-size: 1.5rem;
-    font-weight: 800;
-    letter-spacing: 6px;
-    background: linear-gradient(to right, #fff, var(--accent));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+.title-label {
+    font-weight: 700;
+    color: #8892a0;
 }
 
-.logo-text span {
-    font-weight: 300;
-}
-
-.status-badge {
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    padding: 8px 16px;
-    border-radius: 100px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 1px;
+.title-status {
     display: flex;
     align-items: center;
-    gap: 10px;
-    color: var(--text-dim);
+    gap: 6px;
+    font-weight: 500;
 }
 
-.status-badge.active .status-dot {
-    background: var(--success);
-    box-shadow: 0 0 15px var(--success);
-}
-
+/* Pulsing status dot */
 .status-dot {
-    width: 8px;
-    height: 8px;
-    background: #444;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
+    background: #444;
+    display: inline-block;
 }
 
-/* ── Main Layout ────────────────────────────────────── */
-main {
+.status-dot.active {
+    background: var(--success);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+}
+
+/* ── Terminal Container ─────────────────────────────── */
+#terminal {
     flex: 1;
-    display: grid;
-    grid-template-columns: 1.8fr 1fr;
-    gap: 40px;
-}
-
-.viewport-section {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    overflow: hidden;
 }
 
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-}
-
-.section-header h2 {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--accent);
-    letter-spacing: 2px;
-}
-
-.section-header .count {
-    font-size: 0.8rem;
-    color: var(--text-dim);
-}
-
-.device-scroll-area {
+/* ── Output Pane (scrollable) ───────────────────────── */
+#outputPane {
     flex: 1;
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    border-radius: 24px;
-    padding: 30px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 20px;
     overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 18px 8px;
+    font-size: 13px;
+    line-height: 1.65;
+    word-wrap: break-word;
+    scrollbar-width: thin;
+    scrollbar-color: #1e2330 transparent;
 }
 
-/* ── Cards ──────────────────────────────────────────── */
-.device-card-pro {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--glass-border);
-    border-radius: 20px;
-    padding: 24px;
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+#outputPane::-webkit-scrollbar {
+    width: 6px;
 }
 
-.device-card-pro:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: var(--accent);
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-}
-
-.item-icon {
-    font-size: 2.2rem;
-    margin-bottom: 20px;
-}
-
-.item-meta h4 {
-    font-size: 1.1rem;
-    margin-bottom: 4px;
-}
-
-.item-meta p {
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    margin-bottom: 20px;
-}
-
-.conn-btn {
-    width: 100%;
+#outputPane::-webkit-scrollbar-track {
     background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 10px;
-    border-radius: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s;
 }
 
-.conn-btn:hover {
-    background: var(--accent);
-    color: white;
+#outputPane::-webkit-scrollbar-thumb {
+    background: #1e2330;
+    border-radius: 3px;
 }
 
-.conn-btn.connected {
-    background: var(--success);
-    border-color: var(--success);
-    color: #000;
+/* Line fade-in animation */
+.term-line {
+    animation: line-fade 120ms ease-out;
 }
 
-/* ── Control Pane ───────────────────────────────────── */
-.control-section {
+@keyframes line-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* ── Color Classes ──────────────────────────────────── */
+.c-default  { color: var(--text); }
+.c-success  { color: var(--success); }
+.c-error    { color: var(--error); }
+.c-info     { color: var(--info); }
+.c-warning  { color: var(--warning); }
+.c-dim      { color: #555e6b; }
+.c-bold     { font-weight: 700; }
+.c-prompt   { color: var(--prompt); }
+
+/* Separator lines */
+.c-separator {
+    color: #2a3040;
+}
+
+/* ── Input Bar (fixed bottom) ───────────────────────── */
+#inputBar {
     display: flex;
-    flex-direction: column;
-    gap: 20px;
+    align-items: center;
+    padding: 10px 18px 14px;
+    background: var(--bg);
+    border-top: 1px solid var(--input-underline);
+    min-height: 42px;
+    gap: 0;
 }
 
-.glass-card {
-    background: var(--bg-panel);
-    border: 1px solid var(--glass-border);
-    padding: 24px;
-    border-radius: 20px;
+.prompt {
+    color: var(--prompt);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    margin-right: 8px;
+    user-select: none;
 }
 
-.glass-card h3 {
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    margin-bottom: 15px;
-    letter-spacing: 1px;
-}
-
-.segmented-control {
-    display: flex;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 4px;
-    border-radius: 12px;
-}
-
-.segmented-control button {
+#cmdInput {
     flex: 1;
     background: transparent;
     border: none;
-    color: var(--text-dim);
-    padding: 10px;
-    border-radius: 9px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
+    outline: none;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    caret-color: var(--success);
+    line-height: 1.5;
 }
 
-.segmented-control button.active {
-    background: var(--accent);
-    color: white;
-    box-shadow: 0 4px 12px var(--accent-glow);
+/* Blinking cursor via caret-color + a pseudo-element fallback isn't needed — 
+   native caret-color gives a clean blinking cursor on all Electron/Chromium. */
+#cmdInput::placeholder {
+    color: #2a3040;
 }
 
-.status-display {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.status-icon {
-    font-size: 2rem;
-    width: 50px;
-    height: 50px;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.status-icon.override {
-    color: var(--success);
-    background: rgba(0, 255, 136, 0.1);
-}
-
-.status-labels .primary {
-    display: block;
-    font-size: 1.1rem;
-    font-weight: 700;
-}
-
-.status-labels .secondary {
-    font-size: 0.8rem;
-    color: var(--text-dim);
-}
-
-/* ── Drop Portal ────────────────────────────────────── */
-.drop-portal {
-    flex: 1;
-    position: relative;
-    background: radial-gradient(circle at center, rgba(0, 118, 255, 0.05) 0%, transparent 70%);
-    border: 2px dashed rgba(0, 118, 255, 0.3);
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    transition: all 0.4s;
-    cursor: pointer;
-}
-
-.drop-portal:hover, .drop-portal.active {
-    background: radial-gradient(circle at center, rgba(0, 118, 255, 0.1) 0%, transparent 70%);
-    border-color: var(--accent);
-    transform: scale(1.02);
-}
-
-.portal-content {
-    text-align: center;
-    z-index: 2;
-}
-
-.portal-icon {
-    font-size: 3rem;
-    margin-bottom: 15px;
-}
-
-.portal-hint {
-    display: block;
-    margin-top: 10px;
-    font-size: 0.7rem;
-    color: var(--text-dim);
-}
-
-/* ── File Transfer Progress ──────────────────────────── */
-.progress-container {
-    width: 200px;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-    margin-top: 15px;
-    overflow: hidden;
-    display: none;
-}
-
-.progress-fill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--accent), var(--success));
-    transition: width 0.3s ease-out;
-    box-shadow: 0 0 10px var(--accent-glow);
-}
-
-.progress-text {
-    font-size: 0.65rem;
-    color: var(--accent);
-    margin-top: 8px;
-    font-weight: 700;
-}
-
-/* ── Ghost File ─────────────────────────────────────── */
-.ghost-file-wrapper {
+/* ── Autocomplete Dropdown ──────────────────────────── */
+#autocompleteDropdown {
     position: fixed;
-    z-index: 10000;
-    pointer-events: auto;
-    background: rgba(15, 15, 20, 0.95);
-    border: 1px solid var(--accent);
-    padding: 12px 18px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
-    backdrop-filter: blur(10px);
-    cursor: grab;
-    transition: transform 0.1s;
+    background: #12151a;
+    border: 1px solid var(--bar-border);
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 100;
+    display: none;
+    max-height: 200px;
+    overflow-y: auto;
+    min-width: 180px;
 }
 
-.ghost-file-wrapper:active {
-    cursor: grabbing;
-    transform: scale(0.95);
-}
-
-.ghost-icon {
-    width: 32px;
-    height: 32px;
-}
-
-.ghost-info .name {
-    display: block;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
-
-.ghost-info .hint {
-    font-size: 0.7rem;
-    color: var(--accent);
-}
-
-/* ── Footer ─────────────────────────────────────────── */
-footer {
-    margin-top: 40px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-top: 30px;
-    border-top: 1px solid var(--glass-border);
-}
-
-.legal {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-}
-
-.action-btn {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 14px 40px;
-    border-radius: 14px;
-    font-weight: 700;
-    letter-spacing: 1px;
+.ac-item {
+    padding: 5px 12px;
     cursor: pointer;
-    box-shadow: 0 8px 24px var(--accent-glow);
-    transition: all 0.3s;
+    color: var(--text);
 }
 
-.action-btn:hover {
-    transform: translateY(-2px) scale(1.02);
-    box-shadow: 0 12px 30px var(--accent-glow);
+.ac-item.selected {
+    background: #1e2330;
+    color: var(--success);
 }
 
-.action-btn.active {
-    background: var(--success);
-    color: #000;
-    box-shadow: 0 8px 24px rgba(0, 255, 136, 0.3);
+/* ── Drag-over Overlay ──────────────────────────────── */
+.drag-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 12, 15, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    font-size: 14px;
+    color: var(--info);
+    letter-spacing: 1px;
+    pointer-events: none;
+    border: 2px dashed var(--info);
 }

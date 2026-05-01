@@ -4,105 +4,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Omnibridge | Professional Control Suite</title>
+    <title>OMNIBRIDGE v1.2.0-PRO | Terminal</title>
     <link rel="stylesheet" href="index.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
-    <div class="app-container">
-        <!-- Professional Header -->
-        <header>
-            <div class="branding">
-                <div class="logo-orb"></div>
-                <div class="logo-text">OMNI<span>BRIDGE</span></div>
-            </div>
-            <div class="header-actions">
-                <div class="status-badge" id="statusIndicator">
-                    <span class="status-dot"></span>
-                    DISCOVERY ACTIVE
-                </div>
-            </div>
-        </header>
-
-        <main>
-            <!-- Device Landscape -->
-            <section class="viewport-section">
-                <div class="section-header">
-                    <h2>NETWORK DEVICES</h2>
-                    <span class="count" id="deviceCount">0 Found</span>
-                </div>
-                <div class="device-scroll-area" id="deviceGrid">
-                    <div class="empty-state">
-                        <div class="radar-scan"></div>
-                        <p>Scanning for active bridges...</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Control & Transfer Pane -->
-            <section class="control-section">
-                <div class="glass-card mode-selector">
-                    <h3>SYSTEM MODE</h3>
-                    <div class="segmented-control">
-                        <button class="active" id="btnAuto">AUTOMATIC</button>
-                        <button id="btnManual">MANUAL IP</button>
-                    </div>
-                    <div id="manualIpInput" style="display: none; margin-top: 15px;">
-                        <input type="text" id="ipAddress" placeholder="e.g. 100.x.x.x (Tailscale IP)" style="width: 100%; padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 4px; box-sizing: border-box;">
-                        <button id="btnConnectIp" onclick="manualConnect()" style="width: 100%; margin-top: 10px; padding: 8px; background: #007aff; border: none; color: white; border-radius: 4px; cursor: pointer; font-weight: 600; letter-spacing: 0.05em;">CONNECT TO IP</button>
-                        <div id="manualConnectStatus" style="margin-top: 8px; font-size: 11px; color: #888; min-height: 16px;"></div>
-                    </div>
-                </div>
-
-                <div class="glass-card system-status">
-                    <h3>ACTIVE CONTROL</h3>
-                    <div class="status-display">
-                        <div class="status-icon" id="statusIcon">💻</div>
-                        <div class="status-labels">
-                            <span class="primary" id="activeSystemLabel">LOCAL SYSTEM</span>
-                            <span class="secondary" id="captureInfo">Ready to bridge</span>
-                        </div>
-                    </div>
-                    <div class="clipboard-toggle" style="margin-top: 15px;">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" id="clipboardToggle" style="margin-right: 8px;">
-                            <span>Share Clipboard</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Modern Drop Zone -->
-                <div class="drop-portal" id="dropZone">
-                    <div class="portal-rings"></div>
-                    <div class="portal-content">
-                        <div class="portal-icon">📤</div>
-                        <p>DROP FILE TO SECURE BRIDGE</p>
-                        
-                        <div class="progress-container" id="progressContainer">
-                            <div class="progress-fill" id="progressFill"></div>
-                        </div>
-                        <div class="progress-text" id="progressText" style="display: none;">TRANSFERRING... 0%</div>
-
-                        <span class="portal-hint" id="fileStatus">AES-256 Encrypted</span>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- Professional Footer -->
-        <footer>
-            <div class="legal">BRIDGE v1.2.0-PRO | END-TO-END ENCRYPTION ACTIVE</div>
-            <button class="action-btn" id="btnRun">INITIALIZE ENGINE</button>
-        </footer>
+    <!-- Slim draggable title bar -->
+    <div id="titleBar">
+        <span class="title-label">OMNIBRIDGE v1.2.0-PRO</span>
+        <span class="title-status">
+            <span class="status-dot" id="engineDot"></span>
+            <span id="engineLabel">ENGINE IDLE</span>
+        </span>
     </div>
 
-    <!-- Ghost File Element (Floating) -->
-    <div id="ghostFile" class="ghost-file-wrapper" style="display: none;">
-        <img src="file-icon.png" class="ghost-icon">
-        <div class="ghost-info">
-            <span class="name" id="ghostFileName">filename.txt</span>
-            <span class="hint">Click & Drag to drop anywhere</span>
+    <!-- Terminal fills remaining space -->
+    <div id="terminal">
+        <!-- Scrollable output pane -->
+        <div id="outputPane"></div>
+
+        <!-- Fixed input bar -->
+        <div id="inputBar">
+            <span class="prompt">omni ❯</span>
+            <input type="text" id="cmdInput" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
         </div>
     </div>
 

@@ -18,8 +18,10 @@ class SignalingServer {
             port,
             maxPayload: 256 * 1024 * 1024 
         });
-        this.clients = new Map(); // id -> ws
-        this.connectionRequests = new Map(); // requester_id -> {target_id, deviceInfo, timestamp}
+        this.clients = new Map();            // clientId → ws
+        this.clientNames = new Map();        // deviceName → clientId (for routing by name)
+        this.clientIdToName = new Map();     // clientId → deviceName (for cleanup on disconnect)
+        this.connectionRequests = new Map(); // requester_id → {targetName, deviceInfo, timestamp}
 
         this.wss.on('connection', (ws) => {
             const id = require('crypto').randomUUID();
@@ -31,6 +33,24 @@ class SignalingServer {
                 try {
                     data = JSON.parse(message);
                 } catch (e) {
+                    return;
+                }
+                
+                // Handle client registration — maps device name to clientId
+                if (data.type === 'register') {
+                    const name = data.name;
+                    if (name) {
+                        this.clientNames.set(name, id);
+                        this.clientIdToName.set(id, name);
+                        logger.info('Client registered', { clientId: id, name, platform: data.platform });
+                        
+                        // Send back the assigned clientId so the client knows its own ID
+                        ws.send(JSON.stringify({
+                            type: 'registered',
+                            clientId: id,
+                            name
+                        }));
+                    }
                     return;
                 }
                 
@@ -54,28 +74,45 @@ class SignalingServer {
                     return;
                 }
                 
-                // Handle connection approval requests
+                // Handle connection requests — resolve target by device name
                 if (data.type === 'connection-request') {
-                    // Store pending connection request
+                    const targetName = data.targetName;
+                    const targetClientId = this.clientNames.get(targetName);
+
+                    // Store pending request
                     this.connectionRequests.set(id, {
                         requesterId: id,
-                        targetId: data.targetId,
+                        targetName,
+                        targetClientId: targetClientId || null,
                         deviceInfo: data.deviceInfo,
                         timestamp: Date.now()
                     });
-                    logger.info('Connection request received', { 
-                        requesterId: id, 
-                        targetId: data.targetId 
-                    });
-                    
-                    // Notify target client of pending connection request
-                    if (this.clients.has(data.targetId)) {
-                        this.clients.get(data.targetId).send(JSON.stringify({
-                            type: 'connection-request-pending',
-                            requestingClientId: id,
-                            deviceInfo: data.deviceInfo
+
+                    if (!targetClientId || !this.clients.has(targetClientId)) {
+                        logger.info('Connection request received — target not connected', {
+                            requesterId: id,
+                            targetName
+                        });
+                        // Notify requester that the target is not online on this server
+                        ws.send(JSON.stringify({
+                            type: 'connection-rejected',
+                            reason: `Device "${targetName}" is not connected to this server`
                         }));
+                        return;
                     }
+
+                    logger.info('Connection request received — forwarding to target', {
+                        requesterId: id,
+                        targetName,
+                        targetClientId
+                    });
+
+                    // Forward to target peer
+                    this.clients.get(targetClientId).send(JSON.stringify({
+                        type: 'connection-request-pending',
+                        requestingClientId: id,
+                        deviceInfo: data.deviceInfo
+                    }));
                     return;
                 }
                 
@@ -132,21 +169,59 @@ class SignalingServer {
 
             ws.on('close', () => {
                 this.clients.delete(id);
-                logger.info('Client disconnected', { clientId: id });
+                // Clean up name registry
+                const name = this.clientIdToName.get(id);
+                if (name) {
+                    this.clientNames.delete(name);
+                    this.clientIdToName.delete(id);
+                }
+                this.connectionRequests.delete(id);
+                logger.info('Client disconnected', { clientId: id, name: name || 'unregistered' });
             });
+
+            // Keepalive: mark alive on pong
+            ws.isAlive = true;
+            ws.on('pong', () => { ws.isAlive = true; });
+        });
+
+        // Server-side keepalive sweep: ping all clients every 30s,
+        // terminate any that didn't respond to the previous ping.
+        this._keepaliveInterval = setInterval(() => {
+            this.wss.clients.forEach((ws) => {
+                if (ws.isAlive === false) {
+                    logger.info('Terminating unresponsive client');
+                    return ws.terminate();
+                }
+                ws.isAlive = false;
+                try { ws.ping(); } catch (_) {}
+            });
+        }, 30000);
+
+        // Handle port-in-use and other server errors gracefully
+        this.wss.on('error', (err) => {
+            if (err.code === 'EADDRINUSE') {
+                logger.error(`Port ${port} is already in use. Kill the other process or use a different port.`);
+                logger.error('Find the process: netstat -ano | findstr :' + port);
+            } else {
+                logger.error('WebSocket server error', { error: err.message });
+            }
+            process.exit(1);
         });
 
         // ── IP Discovery for User Convenience ──
-        logger.info('--- OMNIBRIDGE HUB STARTING ---');
-        const networkInterfaces = os.networkInterfaces();
-        for (const interfaceName in networkInterfaces) {
-            for (const iface of networkInterfaces[interfaceName]) {
-                if (iface.family === 'IPv4' && !iface.internal) {
-                    logger.info(`Server Active: ws://${iface.address}:${port}`);
+        // Log after a short tick to ensure the server is actually listening
+        setImmediate(() => {
+            logger.info('--- OMNIBRIDGE HUB STARTING ---');
+            const networkInterfaces = os.networkInterfaces();
+            for (const interfaceName in networkInterfaces) {
+                for (const iface of networkInterfaces[interfaceName]) {
+                    if (iface.family === 'IPv4' && !iface.internal) {
+                        logger.info(`Server Active: ws://${iface.address}:${port}`);
+                    }
                 }
             }
-        }
-        logger.info('-------------------------------');
+            logger.info('-------------------------------');
+        });
     }
 
     broadcast(senderId, data) {

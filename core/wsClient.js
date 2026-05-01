@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const crypto = require('crypto');
+const os = require('os');
 const createLogger = require('./loggerFactory');
 
 // Create logger instance
@@ -19,6 +20,11 @@ class WSClient {
         this.connectionApproved = false;
         this.pendingConnectionRequest = null;
         this.keyExchangeCompleted = false;
+
+        // Internal state guards
+        this._intentionalDisconnect = false;  // true when disconnect() is called manually
+        this._hasNotifiedError = false;        // prevents duplicate error+close notifications
+        this._heartbeatTimer = null;           // ping/pong keepalive timer
     }
 
     connect() {
@@ -27,18 +33,37 @@ class WSClient {
         logger.info('Connecting to server', { url: this.serverUrl });
         this.ws = new WebSocket(this.serverUrl);
 
+        this._intentionalDisconnect = false;
+        this._hasNotifiedError = false;
+
         this.ws.on('open', () => {
             logger.info('Connected to signaling server');
             this.reconnectAttempts = 0;
+            this._hasNotifiedError = false;
             if (this.onStatus) this.onStatus('connected');
             
-            // Initial handshake to announce presence
-            this.sendEvent({ type: 'handshake', name: 'omnibridge-peer' });
+            // Register this client's hostname with the server (raw, unencrypted)
+            // so the server can route connection requests by device name.
+            this.ws.send(JSON.stringify({
+                type: 'register',
+                name: os.hostname(),
+                platform: process.platform
+            }));
+
+            // Start heartbeat ping every 25s to keep the connection alive
+            this._startHeartbeat();
         });
 
         this.ws.on('message', (raw) => {
             try {
                 const msg = JSON.parse(raw);
+                
+                // Handle server registration confirmation
+                if (msg.type === 'registered') {
+                    this.myId = msg.clientId;
+                    logger.info('Registered with server', { clientId: msg.clientId, name: msg.name });
+                    return;
+                }
                 
                 // Handle connection approval messages
                 if (msg.type === 'connection-request-pending') {
@@ -56,8 +81,8 @@ class WSClient {
                 }
                 
                 if (msg.type === 'connection-rejected') {
-                    logger.info('Connection rejected by peer');
-                    if (this.onStatus) this.onStatus('connection-rejected');
+                    logger.info('Connection rejected', { reason: msg.reason });
+                    if (this.onStatus) this.onStatus('connection-rejected', msg);
                     return;
                 }
                 
@@ -104,22 +129,61 @@ class WSClient {
         });
 
         this.ws.on('close', () => {
+            this._stopHeartbeat();
             logger.info('Disconnected from signaling server');
-            if (this.onStatus) this.onStatus('disconnected');
+
+            // If close was triggered by our own disconnect(), don't notify or reconnect
+            if (this._intentionalDisconnect) return;
+
+            // If on('error') already fired, skip the duplicate 'disconnected' notification
+            if (!this._hasNotifiedError) {
+                if (this.onStatus) this.onStatus('disconnected');
+            }
+            this._hasNotifiedError = false;
             this._attemptReconnect();
         });
 
         this.ws.on('error', (e) => {
+            this._stopHeartbeat();
             logger.error('WSClient error', { error: e.message });
+            // Mark that we already sent an error notification;
+            // the subsequent 'close' event should not send a duplicate.
+            this._hasNotifiedError = true;
             if (this.onStatus) this.onStatus('error');
         });
     }
 
     _attemptReconnect() {
+        if (this._intentionalDisconnect) return;
         if (this.reconnectAttempts < this.maxAttempts) {
             this.reconnectAttempts++;
-            logger.info('Reconnection attempt', { attempt: this.reconnectAttempts });
-            setTimeout(() => this.connect(), 2000);
+            const delay = Math.min(2000 * this.reconnectAttempts, 10000); // exponential backoff, max 10s
+            logger.info('Reconnection attempt', { attempt: this.reconnectAttempts, delayMs: delay });
+            setTimeout(() => {
+                if (!this._intentionalDisconnect) this.connect();
+            }, delay);
+        } else {
+            logger.warn('Max reconnection attempts reached');
+        }
+    }
+
+    /** Start periodic ping to keep the WebSocket connection alive. */
+    _startHeartbeat() {
+        this._stopHeartbeat();
+        this._heartbeatTimer = setInterval(() => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                try { this.ws.ping(); } catch (_) {}
+            }
+        }, 25000);
+        // Don't prevent Node from exiting if this is the only active timer
+        if (this._heartbeatTimer.unref) this._heartbeatTimer.unref();
+    }
+
+    /** Stop the heartbeat timer. */
+    _stopHeartbeat() {
+        if (this._heartbeatTimer) {
+            clearInterval(this._heartbeatTimer);
+            this._heartbeatTimer = null;
         }
     }
 
@@ -165,7 +229,9 @@ class WSClient {
     }
 
     disconnect() {
-        this.reconnectAttempts = 0; // reset so manual reconnect starts fresh
+        this._intentionalDisconnect = true;
+        this._stopHeartbeat();
+        this.reconnectAttempts = 0;
         if (this.ws) {
             try {
                 this.ws.removeAllListeners();
@@ -214,13 +280,13 @@ class WSClient {
     }
     
     // Connection approval methods
-    requestConnection(targetDeviceId) {
+    requestConnection(targetDeviceName) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             const msg = {
                 type: 'connection-request',
-                targetId: targetDeviceId,
+                targetName: targetDeviceName,
                 deviceInfo: {
-                    name: 'omnibridge-peer',
+                    name: os.hostname(),
                     platform: process.platform
                 }
             };

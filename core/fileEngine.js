@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { app } = require('electron');
+const os = require('os');
 const crypto = require('crypto');
 const createLogger = require('./loggerFactory');
 
@@ -9,7 +9,15 @@ const logger = createLogger({ appName: 'Omnibridge-FileEngine' });
 
 class FileEngine {
     constructor() {
-        this.baseDir = app.getPath('userData');
+        // Works in both Electron and pure Node.js
+        let baseDir;
+        try {
+            const { app } = require('electron');
+            baseDir = app.getPath('userData');
+        } catch (_) {
+            baseDir = path.join(os.homedir(), '.omnibridge');
+        }
+        this.baseDir = baseDir;
         this.receivedDir = path.join(this.baseDir, 'received_files');
         this._ensureDir(this.receivedDir);
     }
@@ -28,15 +36,15 @@ class FileEngine {
         return filePath;
     }
 
-    // New: Append chunk to a growing file with integrity verification
+    // Append chunk to a growing file with integrity verification
     async appendChunk(fileName, base64Data, isFirst, expectedChecksum) {
         const filePath = path.join(this.receivedDir, fileName);
         if (isFirst && fs.existsSync(filePath)) {
-            await fs.promises.unlink(filePath); // Clear existing
+            await fs.promises.unlink(filePath);
             logger.info('Cleared existing file for new transfer', { fileName, filePath });
         }
         
-        // Verify checksum against the raw base64 string — matches sender's computation in wsClient.sendChunked
+        // Verify checksum against the raw base64 string
         if (expectedChecksum) {
             const actualChecksum = crypto.createHash('sha256').update(base64Data).digest('hex');
             if (actualChecksum !== expectedChecksum) {

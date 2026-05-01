@@ -1,24 +1,29 @@
 const Logger = require('./logger');
 const path = require('path');
-const { app } = require('electron');
+const os = require('os');
 
-// Logger factory function
+// Logger factory function — works in both Electron and pure Node.js environments
 function createLogger(options = {}) {
-  // Default log file path in user data directory
   let logFilePath = null;
   try {
+    // Try Electron's app path first
+    const { app } = require('electron');
     const userDataPath = app.getPath('userData');
     logFilePath = path.join(userDataPath, 'logs', 'omnibridge.log');
-  } catch (error) {
-    // Fallback if app is not available (e.g., in tests)
-    logFilePath = './logs/omnibridge.log';
+  } catch (_) {
+    // Pure Node.js fallback: use ~/.omnibridge/logs/
+    logFilePath = path.join(os.homedir(), '.omnibridge', 'logs', 'omnibridge.log');
   }
 
-  // Merge default options with provided options
+  // When running under the CLI REPL (index.js sets global.__OMNIBRIDGE_CLI),
+  // suppress console output from core loggers — the REPL manages its own stdout.
+  // Standalone processes (e.g. signaling server) keep console output on.
+  const isCLI = global.__OMNIBRIDGE_CLI === true;
+
   const loggerOptions = {
     level: 'INFO',
     fileOutput: logFilePath,
-    consoleOutput: true,
+    consoleOutput: !isCLI,
     appName: 'Omnibridge',
     ...options
   };
