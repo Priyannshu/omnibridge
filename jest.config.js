@@ -8,8 +8,5 @@ module.exports = {
     '**/test/**/*.test.js'
   ],
   verbose: true,
-  testTimeout: 30000,
-  moduleNameMapper: {
-    '^electron$': '<rootDir>/test/__mocks__/electron.js'
-  }
+  testTimeout: 30000
 };
